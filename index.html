@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NECXY Music - Premium</title>
+    
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="manifest" id="manifest-placeholder">
+    
+    <script>
+        const manifest = {
+            "name": "NECXY Music",
+            "short_name": "NECXY",
+            "display": "standalone",
+            "background_color": "#000000",
+            "theme_color": "#FF2E2E",
+            "icons": [{ "src": "https://i.ibb.co/5gyYYKgN/dbc9fb86ae5e.png", "sizes": "512x512", "type": "image/png" }]
+        };
+        const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+        document.querySelector('#manifest-placeholder').setAttribute('href', URL.createObjectURL(blob));
+    </script>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #FF2E2E;
+            --bg: #000000;
+            --sidebar: #121212;
+            --card: #181818;
+            --card-hover: #282828;
+            --text: #ffffff;
+            --text-sub: #b3b3b3;
+            --player-h: 90px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg); color: var(--text);
+            height: 100vh; overflow: hidden;
+        }
+
+        /* --- MASTER LAYOUT (CSS GRID) --- */
+        #app {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            grid-template-rows: 1fr var(--player-h);
+            grid-template-areas: 
+                "sidebar main"
+                "player player";
+            height: 100%; width: 100%;
+        }
+
+        /* 1. SIDEBAR */
+        #sidebar {
+            grid-area: sidebar;
+            background: var(--sidebar);
+            padding: 20px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .logo { 
+            display: flex; align-items: center; gap: 10px; 
+            font-size: 1.5rem; font-weight: 700; margin-bottom: 20px; padding-left: 10px;
+        }
+        .logo img { height: 35px; }
+        .logo span { color: var(--primary); }
+
+        .nav-btn {
+            padding: 10px 15px; border-radius: 5px; color: var(--text-sub);
+            font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 15px;
+            transition: 0.2s; font-size: 0.95rem;
+        }
+        .nav-btn:hover, .nav-btn.active { color: white; background: rgba(255,255,255,0.05); }
+        .nav-btn i { font-size: 1.3rem; width: 25px; text-align: center; }
+
+        /* 2. MAIN CONTENT */
+        #main {
+            grid-area: main;
+            background: linear-gradient(180deg, #222 0%, #121212 30%);
+            overflow-y: auto; padding: 20px 30px; position: relative;
+        }
+
+        /* Search Header */
+        .header {
+            display: flex; align-items: center; gap: 15px; margin-bottom: 30px;
+            position: sticky; top: 0; z-index: 10; padding: 10px 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+        }
+        .search-bar {
+            flex: 1; max-width: 400px; position: relative;
+        }
+        .search-bar i {
+            position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #333;
+        }
+        #search-input {
+            width: 100%; padding: 12px 12px 12px 40px; border-radius: 25px;
+            border: none; font-size: 0.9rem; font-weight: 500; color: #000; background: #fff;
+        }
+        .icon-btn {
+            width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.5);
+            color: white; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;
+            display:flex; align-items:center; justify-content:center;
+        }
+        .icon-btn:hover { transform: scale(1.05); border-color: white; }
+
+        /* Song Grid */
+        .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 20px; }
+        .grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 20px;
+            padding-bottom: 50px;
+        }
+        .card {
+            background: var(--card); padding: 15px; border-radius: 8px; cursor: pointer;
+            transition: 0.3s; position: relative;
+        }
+        .card:hover { background: var(--card-hover); }
+        .card-img-wrap {
+            width: 100%; aspect-ratio: 1/1; border-radius: 6px; overflow: hidden; margin-bottom: 15px;
+            position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .card-img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .play-overlay {
+            position: absolute; bottom: 8px; right: 8px; width: 45px; height: 45px;
+            background: var(--primary); border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; opacity: 0; transform: translateY(10px); transition: 0.3s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); font-size: 1.2rem; color: white;
+        }
+        .card:hover .play-overlay { opacity: 1; transform: translateY(0); }
+        
+        .card-title { font-weight: 700; font-size: 1rem; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-sub { color: var(--text-sub); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* 3. PLAYER BAR */
+        #player {
+            grid-area: player;
+            background: #181818; border-top: 1px solid #282828;
+            display: flex; align-items: center; padding: 0 15px; justify-content: space-between;
+            z-index: 100;
+        }
+
+        /* Left Info */
+        .p-left { display: flex; align-items: center; width: 30%; min-width: 180px; gap: 15px; }
+        .p-thumb { width: 56px; height: 56px; border-radius: 4px; object-fit: cover; background: #333; }
+        .p-info { overflow: hidden; }
+        .p-info h4 { font-size: 0.9rem; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .p-info p { font-size: 0.7rem; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Center Controls */
+        .p-center { width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+        .p-ctrls { display: flex; align-items: center; gap: 20px; }
+        .btn-ctrl { background: none; border: none; color: #b3b3b3; font-size: 1.2rem; cursor: pointer; transition: 0.2s; }
+        .btn-ctrl:hover { color: white; }
+        .btn-play {
+            width: 35px; height: 35px; background: white; color: black; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer;
+            transition: 0.2s; border: none;
+        }
+        .btn-play:hover { transform: scale(1.05); }
+
+        .progress-bar { width: 100%; max-width: 500px; display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: #a7a7a7; }
+        .prog-bg { flex: 1; height: 4px; background: #5e5e5e; border-radius: 2px; cursor: pointer; position: relative; }
+        .prog-fill { height: 100%; background: var(--primary); border-radius: 2px; width: 0%; }
+        .prog-bg:hover .prog-fill { background: #1db954; }
+
+        /* Right Tools */
+        .p-right { width: 30%; display: flex; justify-content: flex-end; align-items: center; gap: 15px; }
+        
+        .badge {
+            padding: 5px 12px; border-radius: 20px; font-size: 0.75rem; border: 1px solid #444;
+            color: #ccc; cursor: pointer; display: flex; align-items: center; gap: 5px;
+        }
+        .badge.on { color: #00ff88; border-color: #00ff88; background: rgba(0, 255, 136, 0.1); }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+        /* VISUALIZER */
+        #visualizer { position: absolute; bottom: 0; left: 0; width: 100%; height: 200px; pointer-events: none; opacity: 0.2; z-index: 0; }
+
+        /* MOBILE RESPONSIVE */
+        @media (max-width: 768px) {
+            #app {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr var(--player-h) 60px; /* Main / Player / Nav */
+                grid-template-areas: 
+                    "main"
+                    "player"
+                    "sidebar";
+            }
+            /* Sidebar becomes Bottom Nav */
+            #sidebar {
+                flex-direction: row; justify-content: space-around; padding: 0; border-top: 1px solid #333;
+                background: black;
+            }
+            .logo, .nav-btn span { display: none; }
+            .nav-btn i { font-size: 1.5rem; width: auto; }
+            .nav-btn { padding: 10px; }
+            .nav-btn:hover { background: none; color: var(--primary); }
+
+            /* Player Adjustments */
+            .p-right { display: none; }
+            .p-left { width: 60%; }
+            .p-center { width: 40%; }
+            .progress-bar { position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; padding: 0; }
+            .prog-bg { height: 2px; border-radius: 0; }
+            .time-txt { display: none; }
+            .header { background: rgba(0,0,0,0.8); padding: 10px 0; }
+        }
+
+        /* MODALS */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; display: none; justify-content: center; align-items: center; }
+        .modal.active { display: flex; }
+        .modal-card { background: #222; padding: 25px; border-radius: 12px; width: 90%; max-width: 350px; text-align: center; border: 1px solid #333; }
+        .btn-full { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 30px; font-weight: 700; margin-top: 15px; cursor: pointer; }
+        .btn-sec { background: #333; margin-top: 10px; }
+        
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; background: black; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <nav id="sidebar">
+        <div class="logo">
+            <img src="https://i.ibb.co/5gyYYKgN/dbc9fb86ae5e.png" alt="Logo">
+            <span>NECXY</span>
+        </div>
+        <div class="nav-btn active" onclick="app.home()"><i class="fa-solid fa-house"></i> <span>Home</span></div>
+        <div class="nav-btn" onclick="document.getElementById('search-input').focus()"><i class="fa-solid fa-search"></i> <span>Search</span></div>
+        <div class="nav-btn" onclick="ui.modal('connect', true)"><i class="fa-solid fa-user-group"></i> <span>Party</span></div>
+        <div class="nav-btn" onclick="document.getElementById('local-file').click()"><i class="fa-solid fa-folder"></i> <span>Local File</span></div>
+        <input type="file" id="local-file" style="display:none" accept="audio/*" onchange="player.playLocal(this.files[0])">
+    </nav>
+
+    <main id="main">
+        <canvas id="visualizer"></canvas>
+        
+        <div class="header">
+            <div class="search-bar">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="search-input" placeholder="What do you want to play?" onkeypress="if(event.key==='Enter') app.search()">
+            </div>
+            <div style="display:flex; gap:10px; margin-left: auto;">
+                <button class="icon-btn" onclick="app.search()"><i class="fa-solid fa-arrow-right"></i></button>
+                <button class="icon-btn" style="background:#222;" onclick="ui.modal('connect', true)"><i class="fa-solid fa-gear"></i></button>
+            </div>
+        </div>
+
+        <div class="grid-header" id="content-title">Trending Hits</div>
+        <div class="grid" id="song-grid">
+            <div style="grid-column: 1/-1; text-align: center; margin-top: 50px; color: #555;">
+                <i class="fa-solid fa-music" style="font-size: 3rem;"></i>
+                <p style="margin-top:10px;">Search for songs, artists, or podcasts</p>
+            </div>
+        </div>
+    </main>
+
+    <div id="player">
+        <div class="p-left">
+            <img src="https://cdn-icons-png.flaticon.com/512/461/461238.png" id="p-img" class="p-thumb">
+            <div class="p-info">
+                <h4 id="p-title">No Track</h4>
+                <p id="p-artist">Select a song to play</p>
+            </div>
+        </div>
+
+        <div class="p-center">
+            <div class="p-ctrls">
+                <button class="btn-ctrl" onclick="player.seek(-10)"><i class="fa-solid fa-backward-step"></i></button>
+                <button class="btn-play" onclick="player.toggle()"><i class="fa-solid fa-play" id="play-icon"></i></button>
+                <button class="btn-ctrl" onclick="player.seek(10)"><i class="fa-solid fa-forward-step"></i></button>
+            </div>
+            <div class="progress-bar">
+                <span class="time-txt" id="curr-time">0:00</span>
+                <div class="prog-bg" onclick="player.seekTo(event)">
+                    <div class="prog-fill" id="prog-fill"></div>
+                </div>
+                <span class="time-txt" id="dur-time">0:00</span>
+            </div>
+        </div>
+
+        <div class="p-right">
+            <div class="badge" id="conn-badge" onclick="ui.modal('connect', true)">
+                <div class="dot"></div> <span id="conn-txt">Offline</span>
+            </div>
+            <button class="btn-ctrl" onclick="player.mute()"><i class="fa-solid fa-volume-high" id="vol-icon"></i></button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-connect" class="modal">
+    <div class="modal-card">
+        <h3>Watch Party</h3>
+        <p style="color:#888; font-size:0.8rem; margin:15px 0;">YOUR ID</p>
+        <div style="background:#000; padding:10px; color:var(--primary); font-family:monospace; border:1px dashed #555; cursor:pointer;" onclick="core.copy()" id="my-id">...</div>
+        
+        <p style="color:#888; font-size:0.8rem; margin:15px 0;">JOIN FRIEND</p>
+        <input type="text" id="peer-id" placeholder="Paste ID here" style="width:100%; padding:12px; background:#111; border:1px solid #333; color:white; border-radius:6px; outline:none;">
+        
+        <button class="btn-full" onclick="net.connect()">CONNECT</button>
+        <button class="btn-full btn-sec" onclick="ui.scanQR()">SCAN QR</button>
+        <button class="btn-full btn-sec" onclick="ui.modal('connect', false)">CLOSE</button>
+    </div>
+</div>
+
+<div id="modal-scanner" class="modal">
+    <div class="modal-card" style="padding:0; overflow:hidden;">
+        <div id="reader"></div>
+        <button class="btn-full btn-sec" style="margin:0; border-radius:0;" onclick="ui.stopScan()">CLOSE CAMERA</button>
+    </div>
+</div>
+
+<audio id="audio" crossorigin="anonymous"></audio>
+
+<script>
+    // --- VARIABLES ---
+    let peer, conn;
+    let isHost = false;
+    let audioCtx, analyser, dataArray;
+    let html5QrCode;
+    const audio = document.getElementById('audio');
+
+    // --- API & SEARCH ---
+    const app = {
+        home: () => {
+            document.getElementById('search-input').value = "Trending Hindi";
+            app.search();
+        },
+        search: async () => {
+            const query = document.getElementById('search-input').value;
+            if(!query) return;
+
+            const grid = document.getElementById('song-grid');
+            grid.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:#888;">Searching...</p>';
+            document.getElementById('content-title').innerText = "Results for: " + query;
+
+            try {
+                // Using a reliable Saavn API wrapper
+                const res = await fetch(`https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=20`);
+                const json = await res.json();
+                
+                grid.innerHTML = '';
+                if(!json.data || json.data.results.length === 0) {
+                    grid.innerHTML = '<p style="grid-column:1/-1; text-align:center;">No songs found.</p>';
+                    return;
+                }
+
+                json.data.results.forEach(song => {
+                    // Extract High Quality
+                    const img = song.image[2]?.link || song.image[0]?.link;
+                    const url = song.downloadUrl[4]?.link || song.downloadUrl[2]?.link || song.downloadUrl[0]?.link;
+                    const title = song.name.replace(/&quot;/g,'"').replace(/&#039;/g,"'");
+                    const artist = song.primaryArtists;
+
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <div class="card-img-wrap">
+                            <img src="${img}" class="card-img" onerror="this.src='https://cdn-icons-png.flaticon.com/512/461/461238.png'">
+                            <div class="play-overlay"><i class="fa-solid fa-play"></i></div>
+                        </div>
+                        <div class="card-title">${title}</div>
+                        <div class="card-sub">${artist}</div>
+                    `;
+                    card.onclick = () => player.play(url, title, artist, img);
+                    grid.appendChild(card);
+                });
+
+            } catch(e) {
+                console.error(e);
+                grid.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:red;">Connection Error. Use a Local Server or Check Internet.</p>';
+            }
+        }
+    };
+
+    // --- PLAYER ---
+    const player = {
+        play: (url, title, artist, img) => {
+            if(!url) return alert("Song link not found");
+            audio.src = url;
+            audio.play().then(() => {
+                visualizer.init();
+            }).catch(e => console.log("Auto-play blocked"));
+            
+            player.updateUI(title, artist, img, true);
+            
+            // Sync
+            isHost = true;
+            if(conn) conn.send({type: 'play', url, title, artist, img});
+        },
+        playLocal: (file) => {
+            const url = URL.createObjectURL(file);
+            player.play(url, file.name, "Local Device", "https://cdn-icons-png.flaticon.com/512/461/461238.png");
+        },
+        toggle: () => {
+            if(audio.paused) { 
+                audio.play(); 
+                document.getElementById('play-icon').className = 'fa-solid fa-pause';
+                if(conn && isHost) conn.send({type:'sync', action:'play'});
+            } else { 
+                audio.pause(); 
+                document.getElementById('play-icon').className = 'fa-solid fa-play';
+                if(conn && isHost) conn.send({type:'sync', action:'pause'});
+            }
+        },
+        seek: (sec) => audio.currentTime += sec,
+        seekTo: (e) => {
+            const rect = e.target.closest('.prog-bg').getBoundingClientRect();
+            const pos = (e.clientX - rect.left) / rect.width;
+            audio.currentTime = pos * audio.duration;
+            if(conn && isHost) conn.send({type:'sync', action:'seek', time: audio.currentTime});
+        },
+        mute: () => {
+            audio.muted = !audio.muted;
+            document.getElementById('vol-icon').className = audio.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+        },
+        updateUI: (title, artist, img, playing) => {
+            document.getElementById('p-title').innerText = title;
+            document.getElementById('p-artist').innerText = artist;
+            document.getElementById('p-img').src = img;
+            document.getElementById('play-icon').className = playing ? 'fa-solid fa-pause' : 'fa-solid fa-play';
+        }
+    };
+
+    audio.addEventListener('timeupdate', () => {
+        const pct = (audio.currentTime / audio.duration) * 100;
+        document.getElementById('prog-fill').style.width = pct + '%';
+        const fmt = t => { const m=Math.floor(t/60), s=Math.floor(t%60); return `${m}:${s<10?'0'+s:s}`; };
+        document.getElementById('curr-time').innerText = fmt(audio.currentTime);
+        document.getElementById('dur-time').innerText = fmt(audio.duration || 0);
+    });
+
+    // --- VISUALIZER ---
+    const visualizer = {
+        init: () => {
+            if(audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser();
+            const src = audioCtx.createMediaElementSource(audio);
+            src.connect(analyser);
+            analyser.connect(audioCtx.destination);
+            analyser.fftSize = 256;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            visualizer.draw();
+        },
+        draw: () => {
+            const canvas = document.getElementById('visualizer');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            
+            analyser.getByteFrequencyData(dataArray);
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            
+            const w = (canvas.width / dataArray.length) * 2.5;
+            let x = 0;
+            for(let i=0; i<dataArray.length; i++) {
+                const h = dataArray[i] / 1.5;
+                ctx.fillStyle = `rgba(255, 46, 46, ${h/300})`;
+                ctx.fillRect(x, canvas.height - h, w, h);
+                x += w + 2;
+            }
+            requestAnimationFrame(visualizer.draw);
+        }
+    };
+
+    // --- P2P ---
+    const net = {
+        init: () => {
+            const id = 'user-' + Math.floor(Math.random()*9000+1000);
+            peer = new Peer(id);
+            peer.on('open', id => document.getElementById('my-id').innerText = id);
+            peer.on('connection', c => net.setup(c));
+        },
+        connect: () => {
+            const id = document.getElementById('peer-id').value;
+            if(id) net.setup(peer.connect(id));
+        },
+        setup: (c) => {
+            conn = c;
+            ui.modal('connect', false);
+            const badge = document.getElementById('conn-badge');
+            badge.classList.add('online');
+            document.getElementById('conn-txt').innerText = "Connected";
+            badge.classList.add('on'); // Green color
+            
+            conn.on('data', data => {
+                if(data.type === 'play') player.play(data.url, data.title, data.artist, data.img);
+                if(data.type === 'sync') {
+                    if(data.action === 'play') { audio.play(); document.getElementById('play-icon').className='fa-solid fa-pause'; }
+                    if(data.action === 'pause') { audio.pause(); document.getElementById('play-icon').className='fa-solid fa-play'; }
+                    if(data.action === 'seek') audio.currentTime = data.time;
+                }
+            });
+        }
+    };
+
+    const ui = {
+        modal: (id, show) => document.getElementById('modal-'+id).classList.toggle('active', show),
+        scanQR: () => {
+            ui.modal('connect', false); ui.modal('scanner', true);
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (txt) => {
+                document.getElementById('peer-id').value = txt; ui.stopScan(); ui.modal('connect', true);
+            });
+        },
+        stopScan: () => { if(html5QrCode) html5QrCode.stop().then(()=>html5QrCode.clear()); ui.modal('scanner', false); }
+    };
+    const core = { copy: () => { navigator.clipboard.writeText(peer.id).then(()=>alert('ID Copied')) } };
+
+    // Init
+    net.init();
+    setTimeout(() => app.home(), 1000);
+
+</script>
+</body>
+</html>
